@@ -1,0 +1,15 @@
+// Karkain-Concurrency runnable example: a coordinated task scheduler.
+import concurrency
+
+func main() {
+    let s = new_scheduler()
+    s = submit(s, "load")
+    s = submit(s, "transform")
+    s = submit(s, "save")
+
+    println(describe_task(s, first_pending(s)))
+    s = claim_next(s)
+    println("pending=" + str(pending_count(s)))
+    s = complete_task(s, "load")
+    println("pending=" + str(pending_count(s)))
+}

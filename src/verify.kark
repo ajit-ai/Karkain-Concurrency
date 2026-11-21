@@ -1,0 +1,12 @@
+// Integration verification for the Karkain-Concurrency public API.
+import concurrency
+
+func main() {
+    let s = submit(submit(new_scheduler(), "parse"), "render")
+    assert_eq(pending_count(s), 2)
+    let claimed = claim_next(s)
+    assert_eq(task_state(claimed, "parse"), "running")
+    println(describe_task(claimed, "parse"))
+    let done = complete_task(claimed, "parse")
+    assert_eq(pending_count(done), 1)
+}

@@ -1,0 +1,7 @@
+name = "karkain-concurrency"
+version = "0.1.0-dev"
+description = "Task coordination primitives for Karkain v1.2.0"
+license = "MIT"
+targets = ["native"]
+
+[dependencies]

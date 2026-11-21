@@ -1,0 +1,108 @@
+// Karkain-Concurrency - task coordination primitives.
+// Karkain Language v1.2.0 verified baseline (tag v1.2.0,
+// commit 77d70693e1e3134dac312a303bffafa7d50fa988).
+//
+// Scope boundary: v1.2.0 has experimental spawn/join and channels, but
+// this framework does not claim thread execution. It provides a portable
+// scheduler state model that hosts can drive from their own loop.
+//
+// Representation: pairs [name, state] with state "pending"/"running"/"done".
+// Arrays are values; mutating functions return the updated scheduler.
+
+// new_scheduler returns an empty task scheduler.
+public func new_scheduler() {
+    return []
+}
+
+// submit adds a pending task.
+public func submit(scheduler, name) {
+    let out = scheduler
+    out = push(out, name)
+    out = push(out, "pending")
+    return out
+}
+
+// task_count returns the number of tracked tasks.
+public func task_count(scheduler) {
+    return len(scheduler) / 2
+}
+
+// task_state returns a task state or "missing".
+public func task_state(scheduler, name) {
+    let i = 0
+    while (i < len(scheduler)) {
+        if scheduler[i] == name {
+            return scheduler[i + 1]
+        }
+        i = i + 2
+    }
+    return "missing"
+}
+
+// set_task_state updates a known task state.
+public func set_task_state(scheduler, name, state) {
+    if task_state(scheduler, name) == "missing" {
+        return scheduler
+    }
+    let out = []
+    let i = 0
+    while (i < len(scheduler)) {
+        if scheduler[i] == name {
+            out = push(out, scheduler[i])
+            out = push(out, state)
+        } else {
+            out = push(out, scheduler[i])
+            out = push(out, scheduler[i + 1])
+        }
+        i = i + 2
+    }
+    return out
+}
+
+// claim_next marks the first pending task as running and returns the
+// updated scheduler. Use task_state on candidates to find what was claimed.
+public func claim_next(scheduler) {
+    let i = 0
+    while (i < len(scheduler)) {
+        if scheduler[i + 1] == "pending" {
+            return set_task_state(scheduler, scheduler[i], "running")
+        }
+        i = i + 2
+    }
+    return scheduler
+}
+
+// first_pending returns the name of the first pending task or "".
+public func first_pending(scheduler) {
+    let i = 0
+    while (i < len(scheduler)) {
+        if scheduler[i + 1] == "pending" {
+            return scheduler[i]
+        }
+        i = i + 2
+    }
+    return ""
+}
+
+// complete_task marks a task as done.
+public func complete_task(scheduler, name) {
+    return set_task_state(scheduler, name, "done")
+}
+
+// pending_count counts pending tasks.
+public func pending_count(scheduler) {
+    let n = 0
+    let i = 0
+    while (i < len(scheduler)) {
+        if scheduler[i + 1] == "pending" {
+            n = n + 1
+        }
+        i = i + 2
+    }
+    return n
+}
+
+// describe_task builds a one-line task diagnostic.
+public func describe_task(scheduler, name) {
+    return name + " -> " + task_state(scheduler, name)
+}

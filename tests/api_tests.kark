@@ -1,0 +1,59 @@
+// Native tests for Karkain-Concurrency.
+
+func sample_scheduler() {
+    let s = submit(new_scheduler(), "a")
+    return submit(s, "b")
+}
+
+func test_new_scheduler() {
+    assert_eq(task_count(new_scheduler()), 0)
+    assert_eq(task_state(new_scheduler(), "a"), "missing")
+}
+
+func test_submit() {
+    let s = sample_scheduler()
+    assert_eq(task_count(s), 2)
+    assert_eq(task_state(s, "a"), "pending")
+}
+
+func test_set_task_state() {
+    let s = set_task_state(sample_scheduler(), "a", "running")
+    assert_eq(task_state(s, "a"), "running")
+    assert_eq(task_state(sample_scheduler(), "a"), "pending")
+}
+
+func test_set_unknown_noop() {
+    let s = set_task_state(new_scheduler(), "x", "done")
+    assert_eq(task_count(s), 0)
+}
+
+func test_claim_next() {
+    let s = claim_next(sample_scheduler())
+    assert_eq(task_state(s, "a"), "running")
+    assert_eq(task_state(s, "b"), "pending")
+    assert_eq(pending_count(s), 1)
+}
+
+func test_first_pending() {
+    let s = sample_scheduler()
+    assert_eq(first_pending(s), "a")
+    assert_eq(first_pending(set_task_state(s, "a", "running")), "b")
+    assert_eq(first_pending(complete_task(complete_task(s, "a"), "b")), "")
+}
+
+func test_complete_task() {
+    let s = complete_task(sample_scheduler(), "a")
+    assert_eq(task_state(s, "a"), "done")
+    assert_eq(pending_count(s), 1)
+}
+
+func test_pending_count() {
+    assert_eq(pending_count(sample_scheduler()), 2)
+    assert_eq(pending_count(new_scheduler()), 0)
+}
+
+func test_describe_task() {
+    let s = sample_scheduler()
+    assert_eq(describe_task(s, "a"), "a -> pending")
+    assert_eq(describe_task(s, "x"), "x -> missing")
+}
