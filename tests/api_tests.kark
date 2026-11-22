@@ -57,3 +57,80 @@ func test_describe_task() {
     assert_eq(describe_task(s, "a"), "a -> pending")
     assert_eq(describe_task(s, "x"), "x -> missing")
 }
+
+// --- Phase 2 regression ---
+
+func test_phase1_regression() {
+    let s = submit(new_scheduler(), "a")
+    assert_eq(task_count(s), 1)
+    assert_eq(first_pending(s), "a")
+    assert_eq(task_state(claim_next(s), "a"), "running")
+    assert_eq(pending_count(complete_task(s, "a")), 0)
+}
+
+// --- Phase 2 additions ---
+
+func test_task_groups() {
+    let g = group_add_task(group_add_task(new_task_group("batch"), "a"), "b")
+    assert_eq(group_size(g), 2)
+    assert_eq(g[0], "batch")
+    assert_eq(g[1], "a")
+}
+
+func test_priorities() {
+    let s = submit(submit(new_scheduler(), "low"), "high")
+    let p = set_priority(set_priority(new_priorities(), "low", 1), "high", 9)
+    assert_eq(priority_of(p, "high"), 9)
+    assert_eq(priority_of(p, "none"), 0)
+    assert_eq(next_by_priority(s, p), "high")
+}
+
+func test_backpressure_and_results() {
+    let bp = new_backpressure(2)
+    assert(can_submit(bp, 1))
+    assert(can_submit(bp, 2) == false)
+    let r = new_task_result("t", true, 42, "")
+    assert(task_result_ok(r))
+    assert_eq(task_result_value(r), 42)
+    assert_eq(task_result_error(r), "")
+}
+
+func test_cancellation_contract() {
+    assert_eq(cancellation_contract(), "runtime.cancel(task_id)")
+    assert_eq(timeout_contract(), "runtime.join_with_timeout(task_id,ms)")
+    let c = new_cancellation("t")
+    assert(cancel_requested(c) == false)
+    assert(cancel_requested(request_cancel(c)))
+    assert(cancel_requested(c) == false)
+}
+
+func test_task_graph() {
+    let s = complete_task(submit(submit(new_scheduler(), "a"), "b"), "a")
+    let g = task_depends(new_task_graph(), "b", "a")
+    assert(task_deps_met(g, s, "b"))
+    let cyclic = task_depends(task_depends(g, "a", "b"), "b", "a")
+    assert(task_graph_has_cycle(cyclic, 4))
+    assert(task_graph_has_cycle(g, 4) == false)
+}
+
+func test_mutex_model() {
+    let m = new_mutex_model()
+    assert(mutex_locked(m) == false)
+    assert(mutex_locked(mutex_acquire(m)))
+    assert(mutex_locked(mutex_release(mutex_acquire(m))) == false)
+    assert_eq(sync_contract(), "runtime.mutex.acquire/release")
+}
+
+func test_shutdown_policy() {
+    assert(policy_drains(shutdown_policy(true)))
+    assert(policy_drains(shutdown_policy(false)) == false)
+}
+
+func test_runtime_info() {
+    let info = new_runtime_info("v1.2.0", true, true)
+    assert(runtime_spawn(info))
+    assert(runtime_channels(info))
+    assert(runtime_spawn(new_runtime_info("v1.2.0", false, true)) == false)
+    assert(parallel_probe_ok(285, 285))
+    assert(parallel_probe_ok(284, 285) == false)
+}

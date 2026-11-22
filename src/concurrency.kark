@@ -106,3 +106,243 @@ public func pending_count(scheduler) {
 public func describe_task(scheduler, name) {
     return name + " -> " + task_state(scheduler, name)
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 additions. Phase 1 scheduler API is unchanged.
+//
+// Runtime probe evidence (Karkain v1.2.0, checked 2026-11-22):
+//   spawn/join/wait_all executed a 10-task work grid -> 285 on both engines.
+//   channel()/chanSend()/receive()/chanClose() transported 5 ordered values
+//   -> 5,0,8 on both engines.
+//   actor() parsed but crashed with exit 0xc0000005 -> actor runtime BLOCKED.
+//   cancel() and join_with_timeout() are undefined -> cancellation and
+//   timeout remain contract-only.
+//   Top-level `let` is rejected -> no global mutable state; use channels.
+
+// new_task_group creates a named task group.
+public func new_task_group(name) {
+    let g = []
+    g = push(g, name)
+    return g
+}
+
+// group_add_task adds a task name to a group.
+public func group_add_task(group, name) {
+    return push(group, name)
+}
+
+// group_size returns the number of grouped tasks.
+public func group_size(group) { return len(group) - 1 }
+
+// new_priorities creates a task priority store.
+public func new_priorities() {
+    return []
+}
+
+// set_priority records a task priority.
+public func set_priority(priorities, name, priority) {
+    let out = []
+    out = push(out, name)
+    out = push(out, priority)
+    let i = 0
+    while (i < len(priorities)) {
+        if priorities[i] == name {
+            i = i + 2
+        } else {
+            out = push(out, priorities[i])
+            out = push(out, priorities[i + 1])
+            i = i + 2
+        }
+    }
+    return out
+}
+
+// priority_of returns a task priority or 0.
+public func priority_of(priorities, name) {
+    let i = 0
+    while (i < len(priorities)) {
+        if priorities[i] == name { return priorities[i + 1] }
+        i = i + 2
+    }
+    return 0
+}
+
+// next_by_priority returns the highest-priority pending task name.
+public func next_by_priority(scheduler, priorities) {
+    let best = ""
+    let value = -1
+    let i = 0
+    while (i < len(scheduler)) {
+        if scheduler[i + 1] == "pending" {
+            let p = priority_of(priorities, scheduler[i])
+            if p > value {
+                value = p
+                best = scheduler[i]
+            }
+        }
+        i = i + 2
+    }
+    return best
+}
+
+// new_backpressure creates a bounded-queue policy.
+public func new_backpressure(max_pending) {
+    let p = []
+    p = push(p, max_pending)
+    return p
+}
+
+// can_submit reports whether another pending task is allowed.
+public func can_submit(policy, pending) {
+    return pending < policy[0]
+}
+
+// new_task_result builds a structured task result.
+public func new_task_result(name, ok, value, err) {
+    let r = []
+    r = push(r, name)
+    r = push(r, ok)
+    r = push(r, value)
+    r = push(r, err)
+    return r
+}
+
+// task_result_ok reports whether a task result succeeded.
+public func task_result_ok(result) { return result[1] }
+
+// task_result_value returns a task result value.
+public func task_result_value(result) { return result[2] }
+
+// task_result_error returns a task result error.
+public func task_result_error(result) { return result[3] }
+
+// cancellation_contract documents the missing runtime operation.
+public func cancellation_contract() { return "runtime.cancel(task_id)" }
+
+// timeout_contract documents the missing runtime operation.
+public func timeout_contract() { return "runtime.join_with_timeout(task_id,ms)" }
+
+// new_cancellation creates a cancellation request model.
+public func new_cancellation(name) {
+    let c = []
+    c = push(c, name)
+    c = push(c, false)
+    return c
+}
+
+// request_cancel sets a cancellation flag.
+public func request_cancel(cancellation) {
+    let out = []
+    out = push(out, cancellation[0])
+    out = push(out, true)
+    return out
+}
+
+// cancel_requested reports whether cancellation was requested.
+public func cancel_requested(cancellation) { return cancellation[1] }
+
+// new_task_graph creates a task dependency graph.
+public func new_task_graph() {
+    return []
+}
+
+// task_depends records a task dependency edge.
+public func task_depends(graph, task, required) {
+    let out = graph
+    out = push(out, task)
+    out = push(out, required)
+    return out
+}
+
+// task_deps_met reports whether all required tasks are done.
+public func task_deps_met(graph, scheduler, task) {
+    let i = 0
+    while (i < len(graph)) {
+        if graph[i] == task {
+            if task_state(scheduler, graph[i + 1]) != "done" { return false }
+        }
+        i = i + 2
+    }
+    return true
+}
+
+// graph_reachable performs a bounded dependency walk.
+public func graph_reachable(graph, from, target, depth) {
+    if from == target { return true }
+    if depth == 0 { return false }
+    let i = 0
+    while (i < len(graph)) {
+        if graph[i] == from {
+            if graph_reachable(graph, graph[i + 1], target, depth - 1) { return true }
+        }
+        i = i + 2
+    }
+    return false
+}
+
+// task_graph_has_cycle reports a dependency cycle.
+public func task_graph_has_cycle(graph, depth) {
+    let i = 0
+    while (i < len(graph)) {
+        if graph_reachable(graph, graph[i + 1], graph[i], depth) { return true }
+        i = i + 2
+    }
+    return false
+}
+
+// new_mutex_model creates a synchronization state model.
+public func new_mutex_model() {
+    let m = []
+    m = push(m, false)
+    return m
+}
+
+// mutex_acquire marks a mutex held.
+public func mutex_acquire(mutex) {
+    let out = []
+    out = push(out, true)
+    return out
+}
+
+// mutex_release marks a mutex free.
+public func mutex_release(mutex) {
+    let out = []
+    out = push(out, false)
+    return out
+}
+
+// mutex_locked reports whether the mutex is held.
+public func mutex_locked(mutex) { return mutex[0] }
+
+// sync_contract documents the missing synchronization primitive.
+public func sync_contract() { return "runtime.mutex.acquire/release" }
+
+// shutdown_policy creates a shutdown policy with a drain flag.
+public func shutdown_policy(drain) {
+    let p = []
+    p = push(p, drain)
+    return p
+}
+
+// policy_drains reports whether pending tasks should be drained.
+public func policy_drains(policy) { return policy[0] }
+
+// new_runtime_info declares detected runtime capabilities.
+public func new_runtime_info(engine, spawn_supported, channel_supported) {
+    let r = []
+    r = push(r, engine)
+    r = push(r, spawn_supported)
+    r = push(r, channel_supported)
+    return r
+}
+
+// runtime_spawn reports whether spawn execution was verified.
+public func runtime_spawn(info) { return info[1] }
+
+// runtime_channels reports whether channel transport was verified.
+public func runtime_channels(info) { return info[2] }
+
+// parallel_probe_ok checks a work-grid probe result.
+public func parallel_probe_ok(actual, expected) {
+    return actual == expected
+}

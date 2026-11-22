@@ -34,7 +34,7 @@ try {
     $out = Invoke-Karkain @('test', $combined); $code = $LASTEXITCODE
     Write-Output "TEST native: exit=$code"; Write-Output $out
     if ($code -ne 0) { throw 'native tests failed' }
-    if ($out -notlike '*9 tests, 9 passed, 0 failed*') { throw 'native test summary mismatch' }
+    if ($out -notlike '*18 tests, 18 passed, 0 failed*') { throw 'native test summary mismatch' }
 
     $verify = Join-Path $repo 'src\verify.kark'
     $out = Invoke-Karkain @('run', $verify); $code = $LASTEXITCODE
@@ -54,6 +54,16 @@ try {
     $out = Invoke-Karkain @('run', (Join-Path $exDir 'task_scheduler.kark')); $code = $LASTEXITCODE
     Write-Output "RUN example: exit=$code"; Write-Output $out
     if ($code -ne 0) { throw 'example failed' }    if ($out -notlike '*pending=2*') { throw 'example check missing' }
+    $advDir = Join-Path $tmp 'advanced'
+    New-Item -ItemType Directory -Path $advDir | Out-Null
+    Copy-Item -LiteralPath $module -Destination (Join-Path $advDir 'concurrency.kark')
+    Copy-Item -LiteralPath (Join-Path $repo 'examples\parallel_runtime.kark') -Destination (Join-Path $advDir 'parallel_runtime.kark')
+    $out = Invoke-Karkain @('run', (Join-Path $advDir 'parallel_runtime.kark')); $code = $LASTEXITCODE
+    Write-Output "RUN advanced example: exit=$code"; Write-Output $out
+    if ($code -ne 0) { throw 'advanced example failed' }
+    if ($out -notlike '*parallel_sum=285*') { throw 'advanced parallel probe missing' }
+    if ($out -notlike '*channel_count=5*') { throw 'advanced channel probe missing' }
+
     Write-Output 'VERIFY: ALL GATES PASSED'
 }
 finally {

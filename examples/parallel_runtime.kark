@@ -1,0 +1,51 @@
+// Karkain-Concurrency Phase 2 example: real spawn/join and channel probes.
+// Executed with the actual Karkain v1.2.0 compiler on both engines.
+import concurrency
+
+func square(i) {
+    return i * i
+}
+
+func producer(ch) {
+    let i = 0
+    while (i < 5) {
+        chanSend(ch, i * 2)
+        i = i + 1
+    }
+    chanClose(ch)
+}
+
+func main() {
+    let tasks = []
+    let n = 0
+    while (n < 10) {
+        push(tasks, spawn(square, n))
+        n = n + 1
+    }
+    let total = 0
+    let i = 0
+    while (i < len(tasks)) {
+        total = total + join(tasks[i])
+        i = i + 1
+    }
+    wait_all()
+    assert(concurrency.parallel_probe_ok(total, 285))
+    println("parallel_sum=" + str(total))
+
+    let ch = channel()
+    spawn(producer, ch)
+    let got = []
+    let j = 0
+    while (j < 5) {
+        push(got, receive(ch))
+        j = j + 1
+    }
+    wait_all()
+    assert(len(got) == 5)
+    assert(got[0] == 0)
+    assert(got[4] == 8)
+    println("channel_count=" + str(len(got)))
+
+    let info = concurrency.new_runtime_info("v1.2.0", true, true)
+    println("runtime_spawn=" + str(concurrency.runtime_spawn(info)))
+}
